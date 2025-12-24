@@ -4,3 +4,5 @@ outputs/
 .env
 token.json
 client_secret.json
+reference/
+data/
