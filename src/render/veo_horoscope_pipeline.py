@@ -175,10 +175,20 @@ class VeoClient:
                         job.video_path = str(video_path)
                         job.status = "done"
                     else:
-                        # Base64 encoded video
-                        print(f"✅ Video ready (base64 encoded)")
-                        job.video_path = video_url  # Store base64 string
-                        job.status = "done"
+                        # Base64 encoded video - decode and save
+                        import base64
+                        video_path = renders / f"{job.scene.sign.lower()}.mp4"
+                        try:
+                            video_data = base64.b64decode(video_url)
+                            with open(video_path, "wb") as f:
+                                f.write(video_data)
+                            print(f"✅ Video decoded and saved: {video_path}")
+                            job.video_path = str(video_path)
+                            job.status = "done"
+                        except Exception as e:
+                            print(f"❌ Failed to decode video: {e}")
+                            job.video_path = video_url  # Store base64 string as fallback
+                            job.status = "done"
                     
                     return job
                 
