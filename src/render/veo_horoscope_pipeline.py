@@ -418,22 +418,30 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--date", type=str, default=None, help="YYYY-MM-DD (default today)")
     p.add_argument("--out", type=str, default="./out", help="Output directory")
     
-    # Video parameters
-    p.add_argument("--aspect", type=str, default="9:16", 
+    # Video parameters - read defaults from .env if available
+    p.add_argument("--aspect", type=str, 
+                   default=os.getenv("VIDEO_ASPECT_RATIO", "9:16"),
                    choices=["9:16", "16:9", "1:1"], 
                    help="Aspect ratio")
-    p.add_argument("--duration", type=int, default=8, 
+    p.add_argument("--duration", type=int, 
+                   default=int(os.getenv("VIDEO_DURATION", "8")),
                    help="Video duration in seconds (max 8)")
-    p.add_argument("--resolution", type=str, default="720p", 
+    p.add_argument("--resolution", type=str, 
+                   default=os.getenv("VIDEO_RESOLUTION", "720p"),
                    choices=["720p", "1080p"],
                    help="Video resolution")
-    p.add_argument("--fps", type=int, default=24, help="Frames per second")
+    p.add_argument("--fps", type=int, 
+                   default=int(os.getenv("VIDEO_FPS", "24")),
+                   help="Frames per second")
     p.add_argument("--no-audio", action="store_true", 
+                   default=os.getenv("VIDEO_GENERATE_AUDIO", "true").lower() == "false",
                    help="Disable audio generation (Veo 3+ only)")
-    p.add_argument("--compression", type=str, default="optimized",
+    p.add_argument("--compression", type=str, 
+                   default=os.getenv("VIDEO_COMPRESSION", "optimized"),
                    choices=["optimized", "high"],
                    help="Compression quality")
-    p.add_argument("--seed", type=int, default=None, 
+    p.add_argument("--seed", type=int, 
+                   default=int(os.getenv("VIDEO_SEED")) if os.getenv("VIDEO_SEED") else None,
                    help="Random seed for reproducibility")
     
     # Model selection
