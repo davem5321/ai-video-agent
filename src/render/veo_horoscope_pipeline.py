@@ -211,21 +211,37 @@ class VeoClient:
 
 # Import horoscope generator
 try:
-    from src.write.horoscope_writer import generate_daily_horoscopes as real_generate, OPENAI_MODELS
+    # Try relative import first (when run as module)
+    try:
+        from ..write.horoscope_writer import generate_daily_horoscopes as real_generate, OPENAI_MODELS
+    except (ImportError, ValueError):
+        # Fall back to absolute import with path manipulation (when run as script)
+        import sys
+        from pathlib import Path
+        # Add project root to path
+        project_root = Path(__file__).parent.parent.parent
+        if str(project_root) not in sys.path:
+            sys.path.insert(0, str(project_root))
+        from src.write.horoscope_writer import generate_daily_horoscopes as real_generate, OPENAI_MODELS
+    
     if os.getenv("OPENAI_API_KEY"):
         generate_daily_horoscopes = real_generate
     else:
-        raise ImportError("No API key, using mock")
-except Exception:
-    def generate_daily_horoscopes(topic_date: dt.date | None = None, model: str | None = None, signs: List[str] | None = None):
-        date_str = (topic_date or dt.date.today()).strftime("%B %d, %Y")
-        all_signs = [
-            "Aries","Taurus","Gemini","Cancer","Leo","Virgo",
-            "Libra","Scorpio","Sagittarius","Capricorn","Aquarius","Pisces"
-        ]
-        signs_to_use = signs if signs else all_signs
-        return {sign: f"{sign}: {date_str} is your lucky day — test horoscope only." for sign in signs_to_use}
-    OPENAI_MODELS = {}
+        raise RuntimeError("OPENAI_API_KEY not found in environment. Add it to your .env file.")
+except Exception as e:
+    print("\n" + "=" * 70)
+    print("❌ ERROR: Failed to initialize OpenAI horoscope generator")
+    print("=" * 70)
+    print(f"Error details: {str(e)}")
+    print("\nPossible causes:")
+    print("  1. OPENAI_API_KEY missing or invalid in .env file")
+    print("  2. OpenAI SDK not installed (pip install openai)")
+    print("  3. Import error in horoscope_writer.py")
+    print("\nTo fix:")
+    print("  - Check your .env file has OPENAI_API_KEY set")
+    print("  - Run: pip install openai")
+    print("=" * 70)
+    raise
 
 # -----------------------------
 # Constants
@@ -322,7 +338,7 @@ class HoroscopeVeoPipeline:
         self.transformers = transformers or [IdentityTransformer()]
         self.openai_model = openai_model
 
-    def run(self, date: dt.date, out_dir: Path, render: RenderSpec, template: str = DEFAULT_TEMPLATE, style_tag: str = "whimsical_astrology", signs: Optional[List[str]] = None) -> List[VideoJob]:
+    def run(self, date: dt.date, out_dir: Path, render: RenderSpec, template: str = DEFAULT_TEMPLATE, style_tag: str = "whimsical_astrology", signs: Optional[List[str]] = None, test_mode: bool = False) -> List[VideoJob]:
         print("\n" + "=" * 70)
         print("STEP 1/3: SETUP & HOROSCOPE GENERATION")
         print("=" * 70)
@@ -349,6 +365,40 @@ class HoroscopeVeoPipeline:
                 scene.prompt = t(scene.prompt, scene)
             (out_dir / "prompts" / f"{scene.sign}.txt").write_text(scene.prompt, encoding="utf-8")
             print(f"   [{i}/{len(scenes)}] {scene.sign} prompt saved")
+
+        # TEST MODE: Output parameters and stop
+        if test_mode:
+            print("\n" + "=" * 70)
+            print("TEST MODE: VEO API PARAMETERS (NOT SUBMITTING)")
+            print("=" * 70)
+            for i, scene in enumerate(scenes, 1):
+                print(f"\n{'─' * 70}")
+                print(f"VIDEO {i}/{len(scenes)}: {scene.sign}")
+                print(f"{'─' * 70}")
+                print(f"\n📋 Horoscope Text:")
+                print(f"   {scene.script_text}")
+                print(f"\n📝 Veo Prompt (saved to prompts/{scene.sign}.txt):")
+                print(f"   {scene.prompt[:200]}..." if len(scene.prompt) > 200 else f"   {scene.prompt}")
+                print(f"\n🎬 Veo API Parameters:")
+                print(f"   Model: {self.veo.model_id}")
+                print(f"   Aspect Ratio: {scene.render.aspect_ratio}")
+                print(f"   Duration: {scene.render.seconds} seconds")
+                print(f"   Resolution: {scene.render.resolution}")
+                print(f"   Generate Audio: {scene.render.generate_audio}")
+                print(f"   Compression: {scene.render.compression_quality}")
+                print(f"   FPS: {scene.render.fps}")
+                if scene.render.seed:
+                    print(f"   Seed: {scene.render.seed}")
+            
+            print("\n" + "=" * 70)
+            print("TEST MODE COMPLETE")
+            print("=" * 70)
+            print(f"\n✅ Generated {len(scenes)} horoscope(s) and prompt(s)")
+            print(f"📁 Output directory: {out_dir}")
+            print(f"📝 Prompts saved to: {out_dir / 'prompts'}")
+            print(f"\n💡 To submit these to Veo API, run without --test-mode flag")
+            print("=" * 70 + "\n")
+            return []
 
         print("\n" + "=" * 70)
         print("STEP 3/3: VIDEO GENERATION (This may take a while...)")
@@ -455,10 +505,11 @@ def parse_args() -> argparse.Namespace:
                    help="Random seed for reproducibility")
     
     # Model selection
-    p.add_argument("--veo-model", type=str, default="veo-3.1-generate-001",
+    p.add_argument("--veo-model", type=str, 
+                   default=os.getenv("VEO_MODEL_ID", "veo-3.1-generate-001"),
                    dest="veo_model",
                    choices=list(VEO_MODELS.keys()),
-                   help=f"Veo video generation model (default: veo-3.1-generate-001)")
+                   help=f"Veo video generation model (default: from VEO_MODEL_ID env or veo-3.1-generate-001)")
     p.add_argument("--openai-model", type=str, default=None,
                    dest="openai_model",
                    choices=list(OPENAI_MODELS.keys()) if OPENAI_MODELS else None,
@@ -475,6 +526,8 @@ def parse_args() -> argparse.Namespace:
     # Testing parameters
     p.add_argument("--signs", type=str, nargs="+", default=None,
                    help="Generate only specific signs (e.g., --signs Aries Leo Pisces)")
+    p.add_argument("--test-mode", action="store_true",
+                   help="Test mode: generate horoscope and Veo prompt but don't submit to API")
     
     return p.parse_args()
 
@@ -526,7 +579,10 @@ def main() -> None:
     if args.openai_model:
         print(f"   ✍️  OpenAI Model: {OPENAI_MODELS.get(args.openai_model, args.openai_model)}")
     else:
-        print(f"   ✍️  OpenAI Model: {os.getenv('OPENAI_MODEL', 'gpt-4o-mini')} (default)")
+        # Get the actual default from horoscope_writer module
+        actual_model = os.getenv('OPENAI_MODEL', 'gpt-5-nano')
+        model_desc = OPENAI_MODELS.get(actual_model, actual_model)
+        print(f"   ✍️  OpenAI Model: {model_desc} (default)")
     print(f"   📐 Aspect ratio: {args.aspect}")
     print(f"   ⏱️  Duration: {args.duration}s")
     print(f"   🎨 Resolution: {args.resolution}")
@@ -536,8 +592,10 @@ def main() -> None:
         print(f"   🌆 Cyberpunk mode: Enabled")
     if args.signs:
         print(f"   🎯 Testing mode: Generating only {', '.join(args.signs)}")
+    if args.test_mode:
+        print(f"   🧪 Test mode: Will NOT submit to Veo API")
 
-    jobs = pipeline.run(date=date, out_dir=out_dir, render=render, style_tag=args.style, signs=args.signs)
+    jobs = pipeline.run(date=date, out_dir=out_dir, render=render, style_tag=args.style, signs=args.signs, test_mode=args.test_mode)
 
 
 if __name__ == "__main__":

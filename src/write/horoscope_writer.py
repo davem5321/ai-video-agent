@@ -30,15 +30,15 @@ SYSTEM_STYLE = (
     "Keep it PG, approachable, and a little playful."
 )
 
-def _client() -> OpenAI:
-    load_dotenv()
-    api_key = os.getenv("OPENAI_API_KEY")
-    if not api_key:
-        raise RuntimeError("OPENAI_API_KEY missing. Add it to your .env")
-    return OpenAI(api_key=api_key)
+# Initialize OpenAI client at module level
+load_dotenv()
+api_key = os.getenv("OPENAI_API_KEY")
+if not api_key:
+    raise RuntimeError("OPENAI_API_KEY missing. Add it to your .env")
+client = OpenAI(api_key=api_key)
 
 def _model() -> str:
-    return os.getenv("OPENAI_MODEL", "gpt-4o-mini")
+    return os.getenv("OPENAI_MODEL", "gpt-5-nano")
 
 def generate_daily_horoscopes(topic_date: datetime.date | None = None, model: str | None = None, signs: List[str] | None = None) -> Dict[str, str]:
     """
@@ -52,7 +52,6 @@ def generate_daily_horoscopes(topic_date: datetime.date | None = None, model: st
     Returns:
         Dict mapping zodiac sign to horoscope text
     """
-    client = _client()
     model = model or _model()
     today = (topic_date or datetime.date.today()).strftime("%B %d, %Y")
     
@@ -74,20 +73,26 @@ def generate_daily_horoscopes(topic_date: datetime.date | None = None, model: st
             "Include a concrete prediction or recommended action for today."
         )
         try:
-            resp = client.chat.completions.create(
-                model=model,
-                temperature=0.8,
-                messages=[
+            # Some models (like gpt-5-nano) only support default temperature
+            api_params = {
+                "model": model,
+                "messages": [
                     {"role": "system", "content": SYSTEM_STYLE},
                     {"role": "user", "content": user_prompt},
                 ],
-            )
+            }
+            # Only add temperature for models that support it
+            if model not in ["gpt-5-nano", "gpt-4.1-nano"]:
+                api_params["temperature"] = 0.8
+            
+            resp = client.chat.completions.create(**api_params)
             text = (resp.choices[0].message.content or "").strip()
             results[sign] = text
             print("✓")
         except Exception as e:
             # If the API is out of quota, or any other error, use a placeholder
-            print(f"✗ (using placeholder: {str(e)[:50]})")
+            print(f"✗")
+            print(f"       ERROR: {str(e)}")
             results[sign] = f"({sign} placeholder horoscope: Today is a lucky day! 🌟)"
         # Tiny delay to be polite on rate limits (adjust as needed)
         time.sleep(0.3)
