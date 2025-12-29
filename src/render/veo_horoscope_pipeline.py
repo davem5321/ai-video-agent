@@ -191,12 +191,13 @@ class VeoClient:
                             output_path=str(video_path_final),
                             duration=float(job.scene.render.seconds),
                             resolution=job.scene.render.resolution or "720p",
-                            fontsize=36,
+                            fontsize=int(os.getenv("CAPTION_FONT_SIZE", "36")),
                             fontcolor="white",
                             outline=2,
                             outlinecolor="black",
                             crf=18,
-                            preset="medium"
+                            preset="medium",
+                            style=os.getenv("CAPTION_STYLE", "scroll")
                         )
                         
                         if success:
@@ -227,12 +228,13 @@ class VeoClient:
                                 output_path=str(video_path_final),
                                 duration=float(job.scene.render.seconds),
                                 resolution=job.scene.render.resolution or "720p",
-                                fontsize=36,
+                                fontsize=int(os.getenv("CAPTION_FONT_SIZE", "36")),
                                 fontcolor="white",
                                 outline=2,
                                 outlinecolor="black",
                                 crf=18,
-                                preset="medium"
+                                preset="medium",
+                                style=os.getenv("CAPTION_STYLE", "scroll")
                             )
                             
                             if success:

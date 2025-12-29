@@ -74,10 +74,11 @@ def create_ass_file(
     alignment: int = 2,
     margin_v: int = 50,
     video_height: int = 1080,
-    output_path: Optional[str] = None
+    output_path: Optional[str] = None,
+    style: str = "scroll"
 ) -> str:
     """
-    Create an ASS subtitle file with scrolling text from bottom to top.
+    Create an ASS subtitle file with scrolling or static text.
     
     Args:
         text: The subtitle text to display
@@ -89,10 +90,11 @@ def create_ass_file(
         fontcolor: Primary color of the text
         outline: Width of the text outline
         outlinecolor: Color of the text outline
-        alignment: Subtitle alignment (1-9, numpad style, 2=bottom center)
+        alignment: Subtitle alignment (1-9, numpad style, 2=bottom center, 5=middle center)
         margin_v: Vertical margin from edge in pixels
         video_height: Height of the video in pixels (for scrolling calculation)
         output_path: Optional path for the ASS file. If None, creates a temp file.
+        style: Animation style - "scroll" for bottom-to-top, "static" for centered/fixed
         
     Returns:
         Path to the ASS file
@@ -112,18 +114,27 @@ def create_ass_file(
     # Clean the text
     cleaned_text = text.replace('\r\n', '\\N').replace('\r', '\\N').replace('\n', '\\N')
     
-    # Calculate scrolling animation for bottom-to-top scroll
-    # Start position: at the bottom of the video
-    start_y = video_height
-    # End position: near the top of the video (leave some margin)
-    end_y = 50
-    
-    # Center horizontally for the movement (960 is center of 1920 width)
-    x_center = 960
+    # Build animation based on style
+    if style.lower() == "scroll":
+        # Calculate scrolling animation for bottom-to-top scroll
+        # Start position: at the bottom of the video
+        start_y = video_height
+        # End position: near the top of the video (leave some margin)
+        end_y = 50
+        # Center horizontally for the movement (960 is center of 1920 width)
+        x_center = 960
+        animation = f"{{\\move({x_center},{start_y},{x_center},{end_y})}}"
+        # Use bottom-center alignment for scrolling
+        text_alignment = 2
+    else:  # static/centered
+        # No animation, just static centered text
+        animation = ""
+        # Use middle-center alignment for static
+        text_alignment = 5
     
     # Create ASS content
     ass_content = f"""[Script Info]
-Title: Scrolling Caption
+Title: Caption
 ScriptType: v4.00+
 WrapStyle: 0
 PlayResX: 1920
@@ -132,11 +143,11 @@ ScaledBorderAndShadow: yes
 
 [V4+ Styles]
 Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
-Style: Default,{fontname},{fontsize},{primary_color},{outline_color},{outline_color},&H00000000,0,0,0,0,100,100,0,0,1,{outline},0,{alignment},10,10,{margin_v},1
+Style: Default,{fontname},{fontsize},{primary_color},{outline_color},{outline_color},&H00000000,0,0,0,0,100,100,0,0,1,{outline},0,{text_alignment},10,10,{margin_v},1
 
 [Events]
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
-Dialogue: 0,{format_ass_time(start_time)},{format_ass_time(end_time)},Default,,0,0,0,,{{\\move({x_center},{start_y},{x_center},{end_y})}}{cleaned_text}
+Dialogue: 0,{format_ass_time(start_time)},{format_ass_time(end_time)},Default,,0,0,0,,{animation}{cleaned_text}
 """
     
     # Create ASS file
@@ -227,10 +238,11 @@ def add_caption_to_video(
     outline: int = 2,
     outlinecolor: str = "black",
     crf: int = 18,
-    preset: str = "medium"
+    preset: str = "medium",
+    style: str = "scroll"
 ) -> tuple[bool, str]:
     """
-    Add a scrolling caption to a video file using ffmpeg.
+    Add a caption to a video file using ffmpeg.
     
     Args:
         video_path: Path to the input video file
@@ -244,6 +256,7 @@ def add_caption_to_video(
         outlinecolor: Color of text outline
         crf: Quality setting (lower is better, 18 is high quality)
         preset: Encoding speed preset
+        style: Caption style - "scroll" for scrolling animation, "static" for centered
         
     Returns:
         Tuple of (success: bool, message: str)
@@ -252,7 +265,7 @@ def add_caption_to_video(
         # Determine video height based on resolution
         video_height = 1080 if resolution == "1080p" else 720
         
-        # Create ASS subtitle file with scrolling animation
+        # Create ASS subtitle file with animation style
         ass_path = create_ass_file(
             text=caption_text,
             start_time=0.0,
@@ -262,9 +275,10 @@ def add_caption_to_video(
             fontcolor=fontcolor,
             outline=outline,
             outlinecolor=outlinecolor,
-            alignment=2,  # Bottom center
+            alignment=2,  # Will be overridden by style setting
             margin_v=50,
-            video_height=video_height
+            video_height=video_height,
+            style=style
         )
         
         # Build ffmpeg filter
