@@ -21,6 +21,7 @@ from pathlib import Path
 from typing import Dict, List, Protocol, runtime_checkable, Optional
 import requests
 import time
+from .subtitle_utils import add_caption_to_video
 
 class VeoClient:
     """Client for Google Vertex AI Veo video generation API"""
@@ -165,26 +166,76 @@ class VeoClient:
                         job.status = "done"
                     elif video_url.startswith("http"):
                         # Download from HTTP URL
-                        video_path = renders / f"{job.scene.sign.lower()}.mp4"
+                        video_path_raw = renders / f"{job.scene.sign.lower()}_raw.mp4"
                         with requests.get(video_url, stream=True) as resp:
                             resp.raise_for_status()
-                            with open(video_path, "wb") as f:
+                            with open(video_path_raw, "wb") as f:
                                 for chunk in resp.iter_content(chunk_size=8192):
                                     f.write(chunk)
-                        print(f"✅ Video downloaded: {video_path}")
-                        job.video_path = str(video_path)
-                        job.status = "done"
+                        print(f"✅ Video downloaded: {video_path_raw}")
+                        
+                        # Add caption using ffmpeg
+                        video_path_final = renders / f"{job.scene.sign.lower()}.mp4"
+                        print(f"🎬 Adding caption to video...")
+                        success, message = add_caption_to_video(
+                            video_path=str(video_path_raw),
+                            caption_text=job.scene.script_text,
+                            output_path=str(video_path_final),
+                            duration=float(job.scene.render.seconds),
+                            resolution=job.scene.render.resolution or "720p",
+                            fontsize=36,
+                            fontcolor="white",
+                            outline=2,
+                            outlinecolor="black",
+                            crf=18,
+                            preset="medium"
+                        )
+                        
+                        if success:
+                            print(f"✅ Caption added successfully: {video_path_final}")
+                            job.video_path = str(video_path_final)
+                            job.status = "done"
+                        else:
+                            print(f"⚠️  Caption failed: {message}")
+                            print(f"   Using raw video instead: {video_path_raw}")
+                            job.video_path = str(video_path_raw)
+                            job.status = "done"
                     else:
                         # Base64 encoded video - decode and save
                         import base64
-                        video_path = renders / f"{job.scene.sign.lower()}.mp4"
+                        video_path_raw = renders / f"{job.scene.sign.lower()}_raw.mp4"
                         try:
                             video_data = base64.b64decode(video_url)
-                            with open(video_path, "wb") as f:
+                            with open(video_path_raw, "wb") as f:
                                 f.write(video_data)
-                            print(f"✅ Video decoded and saved: {video_path}")
-                            job.video_path = str(video_path)
-                            job.status = "done"
+                            print(f"✅ Video decoded and saved: {video_path_raw}")
+                            
+                            # Add caption using ffmpeg
+                            video_path_final = renders / f"{job.scene.sign.lower()}.mp4"
+                            print(f"🎬 Adding caption to video...")
+                            success, message = add_caption_to_video(
+                                video_path=str(video_path_raw),
+                                caption_text=job.scene.script_text,
+                                output_path=str(video_path_final),
+                                duration=float(job.scene.render.seconds),
+                                resolution=job.scene.render.resolution or "720p",
+                                fontsize=36,
+                                fontcolor="white",
+                                outline=2,
+                                outlinecolor="black",
+                                crf=18,
+                                preset="medium"
+                            )
+                            
+                            if success:
+                                print(f"✅ Caption added successfully: {video_path_final}")
+                                job.video_path = str(video_path_final)
+                                job.status = "done"
+                            else:
+                                print(f"⚠️  Caption failed: {message}")
+                                print(f"   Using raw video instead: {video_path_raw}")
+                                job.video_path = str(video_path_raw)
+                                job.status = "done"
                         except Exception as e:
                             print(f"❌ Failed to decode video: {e}")
                             job.video_path = video_url  # Store base64 string as fallback
