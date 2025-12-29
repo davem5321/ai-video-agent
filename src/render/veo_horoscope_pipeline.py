@@ -21,7 +21,15 @@ from pathlib import Path
 from typing import Dict, List, Protocol, runtime_checkable, Optional
 import requests
 import time
-from .subtitle_utils import add_caption_to_video
+
+# Import subtitle utilities
+try:
+    from .subtitle_utils import add_caption_to_video
+except ImportError:
+    # Fall back to absolute import when run as script
+    import sys
+    sys.path.insert(0, str(Path(__file__).parent))
+    from subtitle_utils import add_caption_to_video
 
 class VeoClient:
     """Client for Google Vertex AI Veo video generation API"""
