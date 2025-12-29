@@ -291,11 +291,11 @@ class VideoJob:
 # -----------------------------
 DEFAULT_TEMPLATE = (
     "Cinematic {aspect} shot. Theme: whimsical astrology vlog in a cozy neon-lit studio. "
-    "Foreground: narrator presence implied via over-the-shoulder framing or empty chair, "
-    "floating holographic zodiac glyphs for {sign}. Ambient particle dust. Soft volumetric "
+    "Foreground: narrator presence implied via over-the-shoulder framing, "
+    "Ambient particle dust. Soft volumetric "
     "light through blinds. Camera: slow push-in, shallow depth of field. "
     "Color palette: muted teal, soft gold highlights. "
-    "On-screen caption (subtitle style): '{caption}'. "
+#    "On-screen caption (subtitle style): '{caption}'. "
     "Keep timing readable for {seconds}s."
 )
 
